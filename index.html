@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>停車場比價網</title>
+    <link rel="stylesheet" href="./main.css">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet" />
+</head>
+<body>
+    <!-- 定位權限請求遮罩層 (預設隱藏) -->
+    <div id="location-overlay">
+        <div class="overlay-content">
+            <h2>需要您的位置權限</h2>
+            <p>為了提供停車場資訊，本網站需要取得您目前的位置。請允許我們存取您的位置資訊。</p>
+            <button id="retry-location-btn">重試</button>
+        </div>
+    </div>
+
+    <!-- 左側滑動篩選欄 -->
+    <div id="filter-sidenav" class="sidenav" style="position: fixed; top: 56px; left: 0; width: 320px; height: calc(100vh - 56px); z-index: 200; background: #222; transition: left 0.3s; overflow-y: auto;">
+        <div class="condition-toggle-group">
+            <label id="condition-toggle-label" style="cursor:pointer;">篩選條件</label>
+            <button id="condition-toggle-btn" class="triangle-btn" type="button" aria-label="展開條件"></button>
+        </div>
+        <div id="condition-checkbox-group">
+            <div class="checkbox-row">
+                <label><input type="checkbox"> 室內停車場</label>
+                <label><input type="checkbox"> 電動車充電</label>
+            </div>
+            <input type="text" id="price-input" placeholder="價格上限(元/h)，例如: 50">
+        </div>
+        <div class="range-toggle-group">
+            <label for="range-select" id="range-toggle-label" style="cursor:pointer;">搜尋範圍</label>
+            <button id="range-toggle-btn" class="triangle-btn" type="button" aria-label="展開搜尋範圍"></button>
+        </div>
+
+        <div id="range-select-group" style="display: none;">
+            <select id="range-select" onchange="updateRangePlaceholder()">
+                <option value="count">最近的____個</option>
+                <option value="distance">____公尺以內</option>
+            </select>
+            <input type="text" id="range-input" placeholder="10">
+            <!-- 排序區塊：三行距離/價格/剩餘空位，每行右側有上下箭頭 -->
+            <div class="sort-list-group" style="width: calc(100% - 72px); margin-left: 0; margin-top: 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+                <div class="sort-row sort-second"><span class="sort-label">距離</span><span></span></div>
+                <div class="sort-row sort-second"><span class="sort-label">價格</span><span></span></div>
+                <div class="sort-row sort-second"><span class="sort-label">剩餘空位</span><span></span></div>
+            </div>
+            <button id="range-submit-btn" style="margin-left:8px; padding:2px 10px; border-radius:4px; border:1px solid #888; background:#444; color:#fff; cursor:pointer; margin-top: 8px;">套用</button>
+        </div>
+        <script>
+        function updateRangePlaceholder() {
+            var select = document.getElementById('range-select');
+            var input = document.getElementById('range-input');
+            if (select.value === 'count') {
+                input.placeholder = '例如：10';
+            } else {
+                input.placeholder = '例如：500';
+            }
+        }
+        // 展開/收合搜尋範圍
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('range-toggle-btn');
+            var group = document.getElementById('range-select-group');
+            var label = document.getElementById('range-toggle-label');
+            function toggleRange() {
+                if (group.style.display === 'none') {
+                    group.style.display = 'block';
+                    btn.classList.add('open');
+                } else {
+                    group.style.display = 'none';
+                    btn.classList.remove('open');
+                }
+            }
+            btn.addEventListener('click', toggleRange);
+            label.addEventListener('click', toggleRange);
+            // 條件展開/收合
+            var condBtn = document.getElementById('condition-toggle-btn');
+            var condLabel = document.getElementById('condition-toggle-label');
+            var condGroup = document.getElementById('condition-checkbox-group');
+            function toggleCond() {
+                if (condGroup.style.display === 'none' || condGroup.style.display === '') {
+                    condGroup.style.display = 'block';
+                    condBtn.classList.add('open');
+                } else {
+                    condGroup.style.display = 'none';
+                    condBtn.classList.remove('open');
+                }
+            }
+            condBtn.addEventListener('click', toggleCond);
+            condLabel.addEventListener('click', toggleCond);
+
+            // 動態渲染排序箭頭
+            function renderSortArrows() {
+                const sortList = document.querySelector('.sort-list-group');
+                const rows = Array.from(sortList.querySelectorAll('.sort-row'));
+                rows.forEach((row, idx) => {
+                    const label = row.querySelector('.sort-label').textContent.trim();
+                    const span = row.querySelector('span:last-child');
+                    span.innerHTML = '';
+                    // 上箭頭
+                    if (idx > 0) {
+                        const upBtn = document.createElement('button');
+                        upBtn.className = 'sort-arrow sort-up';
+                        upBtn.title = label + '上移';
+                        upBtn.style = 'background:none; border:none; cursor:pointer; padding:2px 4px;';
+                        upBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 4l4 6H4z" fill="#818181"/></svg>';
+                        upBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const prev = row.previousElementSibling;
+                            if (prev && prev.classList.contains('sort-row')) {
+                                sortList.insertBefore(row, prev);
+                                renderSortArrows();
+                            }
+                        });
+                        span.appendChild(upBtn);
+                    }
+                    // 下箭頭
+                    if (idx < rows.length - 1) {
+                        const downBtn = document.createElement('button');
+                        downBtn.className = 'sort-arrow sort-down';
+                        downBtn.title = label + '下移';
+                        downBtn.style = 'background:none; border:none; cursor:pointer; padding:2px 4px;';
+                        downBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 12l-4-6h8z" fill="#818181"/></svg>';
+                        downBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const next = row.nextElementSibling;
+                            if (next && next.classList.contains('sort-row')) {
+                                sortList.insertBefore(next, row);
+                                renderSortArrows();
+                            }
+                        });
+                        span.appendChild(downBtn);
+                    }
+                });
+            }
+            renderSortArrows();
+        });
+        </script>
+        <!-- 找到的停車場區塊，直接跟在 input 下方 -->
+        <div id="parking-info-block">
+            <h3 style="text-align:center; font-size:20px; color:#fff; margin-bottom:8px;">找到的停車場</h3>
+            <div id="info-content">
+                <ul id="parking-list" style="background:rgba(255,255,255,0.95); color:#222; border-radius:8px; margin:0 16px; padding:8px 0;"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 頂部標題欄，包含按鈕和網站標題 -->
+    <div id="top-bar" style="position: fixed; top: 0; left: 0; width: 100%; z-index: 100; height: 56px; background: #222; display: flex; align-items: center;">
+        <button id="menu-toggle-btn" style="position:absolute; left:16px; top:50%; transform:translateY(-50%); z-index:20; background:#333; color:#fff; border:none; border-radius:4px; padding:8px 12px; font-size:20px; cursor:pointer;">☰</button>
+        <h1 id="main-title" style="margin-left:48px; color:#fff; font-size: 1.5rem;">停車場比價網</h1>
+    </div>
+
+    <!-- 地圖全螢幕區域 -->
+    <div id="map-container" style="position: absolute; top: 56px; left: 0; width: 100vw; height: calc(100vh - 56px);">
+        <div id="map" style="width: 100vw; height: 100%; min-height: 400px;"></div>
+        <button id="locate-btn" class="locate-btn" onclick="locateUser()" title="定位我" style="position: absolute; right: 24px; bottom: 24px; z-index: 300;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="8" stroke="#3498db" stroke-width="2" fill="#fff"/>
+              <circle cx="12" cy="12" r="3" fill="#3498db"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 引入 JavaScript 檔案 -->
+    <script src="./main.js"></script>
+    <script>
+  mapboxgl.accessToken = 'pk.eyJ1IjoiY2FzcGVyMjEiLCJhIjoiY21jemluNnduMHQ5NTJrc2J6dGNoeG4zNCJ9.YOJYDPzvov3Q_SsxqjyR-A';
+
+  // 嘗試在頁面載入時自動定位
+  document.addEventListener('DOMContentLoaded', function() {
+    locateUser();
+  });
+
+  let userLocation = null;
+  let currentRouteId = null;
+  let activePopup = null;
+  let parking_list = [];  // 儲存距離資料
+  let parking_markers = [];  // 儲存 marker 和停車場資料對應
+  let filterIndoor = false; // Variable to store whether '室內停車場' is selected
+let filterEV = false; // Variable to store whether '電動車充電' is selected
+let MAX_PARKING_RENDER = 10; // Default value, now let
+let priceUpperLimit = null; // 價格上限
+let rangeMode = 'count'; // 'count' or 'distance'
+let rangeValue = null; // 數值 (個數或公尺)
+
+  // 地圖初始化
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/dark-v11',
+    center: [121.5376, 25.0273],
+    zoom: 13
+  });
+
+
+
+
+  // ====== 動態排序優先順序 ======
+  let currentSortPriority = getSortPriorityFromDOM();
+
+  function getSortPriorityFromDOM() {
+    const sortLabels = document.querySelectorAll('.sort-list-group .sort-label');
+    return Array.from(sortLabels).map(label => {
+      const text = label.textContent.trim();
+      if (text.includes('距離')) return 'distance';
+      if (text.includes('價格')) return 'price';
+      if (text.includes('剩餘空位')) return 'spaces';
+      return null;
+    }).filter(Boolean);
+  }
+
+  // 監聽排序順序變動，更新 currentSortPriority
+  document.addEventListener('DOMContentLoaded', function() {
+    const sortList = document.querySelector('.sort-list-group');
+    if (sortList) {
+      sortList.addEventListener('click', function(e) {
+        if (e.target.closest('.sort-arrow')) {
+          currentSortPriority = getSortPriorityFromDOM();
+        }
+      });
+    }
+  });
+
+  function sortParkingLots(lots) {
+    // 使用 currentSortPriority 進行排序
+    return lots.slice().sort((a, b) => {
+      for (let key of currentSortPriority) {
+        let aVal, bVal;
+        if (key === 'distance') {
+          aVal = a.distance ?? Infinity;
+          bVal = b.distance ?? Infinity;
+        } else if (key === 'price') {
+          const parsePrice = v => {
+            if (typeof v.price === 'number') return v.price;
+            if (typeof v.price === 'string') {
+              const match = v.price.match(/(\d+)[元|\/]/);
+              return match ? parseInt(match[1], 10) : Infinity;
+            }
+            return Infinity;
+          };
+          aVal = parsePrice(a);
+          bVal = parsePrice(b);
+        } else if (key === 'spaces') {
+          aVal = (a.totalcar ?? 0) - (a.usedcar ?? 0);
+          bVal = (b.totalcar ?? 0) - (b.usedcar ?? 0);
+          // 空位多的排前面
+          if (aVal !== bVal) return bVal - aVal;
+          continue;
+        }
+        if (aVal !== bVal) return aVal - bVal;
+      }
+      return 0;
+    });
+  }
+
+  // Compute distance between two coordinates (Haversine formula)
+  function computeDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371; // Earth radius in km
+    const toRad = deg => deg * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  // Get user location first, then fetch and process parking lots
+  function renderParkingLotsWithDistance(userLat, userLng) {
+    // Remove all existing markers from the map
+    parking_markers.forEach(item => item.marker.remove());
+    parking_markers = [];
+    fetch('data/TCMSV_alldesc.json')
+      .then(response => response.json())
+      .then(json => {
+        let allParkingLots = json.data.park.slice(); // Store all parking lots
+        // Precompute distance for each lot (before filtering)
+        allParkingLots.forEach(lot => {
+          lot.distance = computeDistance(userLat, userLng, lot.lat, lot.lng);
+        });
+        allParkingLots = sortParkingLots(allParkingLots); // 按優先順序排序
+        // Apply filters
+        let filteredLots = [];
+        let i = 0;
+        if (rangeMode === 'distance' && rangeValue !== null && !isNaN(rangeValue)) {
+          // 僅顯示距離在 rangeValue 公尺以內的
+          while (i < allParkingLots.length) {
+            const lot = allParkingLots[i];
+            // 取得價格數值
+            let lotPrice = null;
+            if (typeof lot.price === 'number') {
+              lotPrice = lot.price;
+            } else if (typeof lot.price === 'string') {
+              const match = lot.price.match(/(\d+)/);
+              lotPrice = match ? parseInt(match[1], 10) : null;
+            }
+            // 檢查價格上限
+            let priceOk = true;
+            if (priceUpperLimit !== null && !isNaN(priceUpperLimit)) {
+              priceOk = (lotPrice !== null && lotPrice <= priceUpperLimit);
+            }
+            // 檢查距離
+            let distOk = (lot.distance * 1000 <= rangeValue);
+            if ((!filterIndoor || lot.inside === true) && (!filterEV || lot.charge === true) && priceOk && distOk) {
+              filteredLots.push(lot);
+            }
+            i++;
+          }
+        } else {
+          // 預設：最近的 MAX_PARKING_RENDER 個
+          while (filteredLots.length < MAX_PARKING_RENDER && i < allParkingLots.length) {
+            const lot = allParkingLots[i];
+            // 取得價格數值
+            let lotPrice = null;
+            if (typeof lot.price === 'number') {
+              lotPrice = lot.price;
+            } else if (typeof lot.price === 'string') {
+              const match = lot.price.match(/(\d+)/);
+              lotPrice = match ? parseInt(match[1], 10) : null;
+            }
+            // 檢查價格上限
+            let priceOk = true;
+            if (priceUpperLimit !== null && !isNaN(priceUpperLimit)) {
+              priceOk = (lotPrice !== null && lotPrice <= priceUpperLimit);
+            }
+            if ((!filterIndoor || lot.inside === true) && (!filterEV || lot.charge === true) && priceOk) {
+              filteredLots.push(lot);
+            }
+            i++;
+          }
+        }
+        filteredLots.forEach(point => {
+          // 計算剩餘空位
+          const spaces = (typeof point.totalcar === 'number') ? point.totalcar : (point.totalcar ? point.totalcar : '未知');
+          const popupContent = `${point.name}｜價格：${point.price}｜剩餘空位：${spaces}`;
+          const marker = new mapboxgl.Marker({ color: '#e74c3c' })
+            .setLngLat([point.lng, point.lat])
+            .setPopup(new mapboxgl.Popup().setText(popupContent))
+            .addTo(map);
+
+          // 把 marker 和對應停車場資料放進陣列
+          parking_markers.push({ marker: marker, data: point });
+
+          // hover 事件（先只顯示 popup，不畫路線）
+          marker.getElement().addEventListener('mouseenter', () => {
+            const parkingInfo = parking_list.find(p => p.name === point.name);
+            if (parkingInfo && userLocation) {
+              // 如果已計算過距離，就畫路線和顯示 popup
+              if (currentRouteId) {
+                if (map.getSource(currentRouteId)) {
+                  map.removeLayer(currentRouteId);
+                  map.removeSource(currentRouteId);
+                }
+              }
+              if (activePopup) activePopup.remove();
+
+              currentRouteId = 'route-' + Date.now();
+              map.addSource(currentRouteId, {
+                type: 'geojson',
+                data: { type: 'Feature', geometry: parkingInfo.route }
+              });
+              map.addLayer({
+                id: currentRouteId,
+                type: 'line',
+                source: currentRouteId,
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#3b9ddd', 'line-width': 4 }
+              });
+
+              const coords = parkingInfo.route.coordinates;
+              const midPoint = coords[Math.floor(coords.length / 2)];
+
+              activePopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
+                .setLngLat(midPoint)
+                .setHTML(`<strong>距離:</strong> ${parkingInfo.distance} km<br><strong>預估:</strong> ${parkingInfo.duration} 分`)
+                .addTo(map);
+            }
+          });
+
+          marker.getElement().addEventListener('mouseleave', () => {
+            if (currentRouteId) {
+              if (map.getSource(currentRouteId)) {
+                map.removeLayer(currentRouteId);
+                map.removeSource(currentRouteId);
+              }
+              currentRouteId = null;
+            }
+            if (activePopup) {
+              activePopup.remove();
+              activePopup = null;
+            }
+          });
+        });
+
+        // Add this function to update the parking list
+        function updateParkingList(lots) {
+          const list = document.getElementById('parking-list');
+          list.innerHTML = '';
+          lots.forEach(lot => {
+            const li = document.createElement('li');
+            // 顯示名稱、距離、價格、剩餘空位
+            const price = (typeof lot.price === 'number') ? lot.price : (lot.price ? lot.price : '未知');
+            const spaces = (typeof lot.totalcar === 'number') ? lot.totalcar : (lot.totalcar ? lot.totalcar : '未知');
+            li.innerHTML = `<strong>${lot.name}</strong><br>
+              距離：${Math.round(lot.distance * 1000)} 公尺<br>
+              價格：${price} 元/時<br>
+              剩餘空位：${spaces} 格`;
+            list.appendChild(li);
+          });
+        }
+
+        updateParkingList(filteredLots);
+        // --- Fix: fetch and update route/distance for each filtered lot ---
+        parking_list = [];
+        if (userLocation) {
+          filteredLots.forEach(point => {
+            const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLocation[0]},${userLocation[1]};${point.lng},${point.lat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+            fetch(url)
+              .then(res => res.json())
+              .then(result => {
+                if (result.routes && result.routes[0]) {
+                  const distanceKm = (result.routes[0].distance / 1000).toFixed(2);
+                  const durationMin = Math.round(result.routes[0].duration / 60);
+                  const route = result.routes[0].geometry;
+                  parking_list.push({
+                    ...point,
+                    distance: parseFloat(distanceKm),
+                    duration: durationMin,
+                    route: route
+                  });
+                }
+              });
+          });
+        }
+      });
+  }
+
+  // 使用者定位＆計算距離
+  function locateUser() {
+    navigator.geolocation.getCurrentPosition(position => {
+      userLocation = [position.coords.longitude, position.coords.latitude];
+      new mapboxgl.Marker({ color: '#3498db' })
+        .setLngLat(userLocation)
+        .setPopup(new mapboxgl.Popup().setText("你的位置"))
+        .addTo(map);
+      map.flyTo({ center: userLocation, zoom: 15 });
+
+      // 預先計算所有停車場距離並渲染
+      renderParkingLotsWithDistance(position.coords.latitude, position.coords.longitude);
+
+      // 定位完才去計算所有距離（原本的邏輯保留）
+      parking_markers.forEach(item => {
+        const point = item.data;
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLocation[0]},${userLocation[1]};${point.lng},${point.lat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+
+        fetch(url)
+          .then(res => res.json())
+          .then(result => {
+            const distanceKm = (result.routes[0].distance / 1000).toFixed(2);
+            const durationMin = Math.round(result.routes[0].duration / 60);
+            const route = result.routes[0].geometry;
+
+            parking_list.push({
+              ...point,
+              distance: parseFloat(distanceKm),
+              duration: durationMin,
+              route: route
+            });
+          });
+      });
+    }, () => {
+      alert("無法取得您的定位，請確認定位權限。");
+    });
+  }
+
+  // 如果一進來就有定位權限，直接渲染
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(position => {
+      renderParkingLotsWithDistance(position.coords.latitude, position.coords.longitude);
+    });
+  } else {
+    // fallback: 不顯示任何停車場
+  }
+
+  // Listen for checkbox change
+  document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    const indoorCheckbox = checkboxes[0];
+    const evCheckbox = checkboxes[1];
+    // 監聽價格上限 input
+    const priceInput = document.getElementById('price-input');
+    function updatePriceLimitAndRender() {
+      const val = priceInput.value.trim();
+      if (val === '') {
+        priceUpperLimit = null;
+      } else {
+        const num = parseInt(val, 10);
+        priceUpperLimit = isNaN(num) ? null : num;
+      }
+      if (userLocation) {
+        renderParkingLotsWithDistance(userLocation[1], userLocation[0]);
+      }
+    }
+    priceInput.addEventListener('change', updatePriceLimitAndRender);
+    priceInput.addEventListener('keyup', function(e) {
+      if (e.key === 'Enter') updatePriceLimitAndRender();
+    });
+    if (indoorCheckbox) {
+      indoorCheckbox.addEventListener('change', function() {
+        filterIndoor = this.checked;
+        if (userLocation) {
+          renderParkingLotsWithDistance(userLocation[1], userLocation[0]);
+        }
+      });
+    }
+    if (evCheckbox) {
+      evCheckbox.addEventListener('change', function() {
+        filterEV = this.checked;
+        if (userLocation) {
+          renderParkingLotsWithDistance(userLocation[1], userLocation[0]);
+        }
+      });
+    }
+  });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const menuBtn = document.getElementById('menu-toggle-btn');
+      const sidenav = document.getElementById('filter-sidenav');
+      let sidenavOpen = true;
+      menuBtn.addEventListener('click', function() {
+        if (sidenavOpen) {
+          sidenav.style.left = '-320px'; // Hide the sidenav (slide out)
+          sidenavOpen = false;
+        } else {
+          sidenav.style.left = '0'; // Show the sidenav (slide in)
+          sidenavOpen = true;
+        }
+      });
+    });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const rangeSelect = document.getElementById('range-select');
+    const rangeInput = document.getElementById('range-input');
+    const rangeSubmit = document.getElementById('range-submit-btn');
+    function updateRangeAndRender() {
+      rangeMode = rangeSelect.value;
+      const val = parseInt(rangeInput.value, 10);
+      if (rangeMode === 'count') {
+        if (!isNaN(val) && val > 0) {
+          MAX_PARKING_RENDER = val;
+          rangeValue = null;
+          if (userLocation) {
+            renderParkingLotsWithDistance(userLocation[1], userLocation[0]);
+          }
+        } else {
+          alert('請輸入大於0的整數');
+        }
+      } else if (rangeMode === 'distance') {
+        if (!isNaN(val) && val > 0) {
+          rangeValue = val;
+          if (userLocation) {
+            renderParkingLotsWithDistance(userLocation[1], userLocation[0]);
+          }
+        } else {
+          alert('請輸入大於0的整數');
+        }
+      }
+    }
+    rangeSubmit.addEventListener('click', updateRangeAndRender);
+    rangeSelect.addEventListener('change', updateRangeAndRender);
+    rangeInput.addEventListener('keyup', function(e) {
+      if (e.key === 'Enter') updateRangeAndRender();
+    });
+  });
+        </script>
+</body>
+</html>

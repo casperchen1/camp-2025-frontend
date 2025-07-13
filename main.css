@@ -1,0 +1,475 @@
+/* 全局樣式 */
+body {
+    background-color: blanchedalmond;
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden; /* 防止水平滾動條出現 */
+}
+
+/* 側邊導覽選單 */
+.sidenav {
+    height: calc(100vh - 70px); /* 填滿標題欄下方到最下方 */
+    top: 70px; /* 從標題欄下方開始 */
+    width: 308px; /* 原280px增加10% */
+    position: fixed; /* 固定位置，不隨滾動條移動 */
+    z-index: 4; /* 在頂部欄之下 */
+    left: 0;
+    background-color: #111; /* 背景色 */
+    overflow-x: hidden; /* 隱藏水平滾動條 */
+    overflow-y: auto;
+    transition: none;
+    padding-top: 10px; /* 只需一般內距 */
+    padding-bottom: 100px; /* 增加底部空間，確保最後一行不被遮住 */
+}
+
+/* 側邊欄內的標題和標籤 */
+.sidenav h4,
+.sidenav label {
+    padding: 8px 8px 8px 32px;
+    text-decoration: none;
+    font-size: 18px;
+    color: #818181;
+    display: block;
+    transition: 0.3s;
+    cursor: pointer;
+    white-space: nowrap; /* 防止文字換行 */
+}
+
+.sidenav label:hover {
+    color: #f1f1f1;
+}
+
+/* 側邊欄內的文字輸入框 */
+.sidenav input[type="text"] {
+    margin-left: 32px;
+    width: calc(100% - 72px);
+    padding: 8px;
+    font-size: 16px;
+    margin-top: 5px;
+    box-sizing: border-box;
+}
+
+/* 側邊欄內的選單 */
+.sidenav select {
+    margin-left: 32px;
+    width: calc(100% - 72px);
+    padding: 8px;
+    font-size: 16px;
+    margin-top: 5px;
+    box-sizing: border-box;
+}
+
+/* 側邊欄的關閉按鈕 */
+.sidenav .closebtn {
+    position: absolute;
+    top: 10px; /* 調整位置以對齊頂部欄 */
+    right: 25px;
+    font-size: 36px;
+    margin-left: 50px;
+    color: #818181;
+    text-decoration: none;
+}
+
+.sidenav .closebtn:hover {
+    color: #f1f1f1;
+}
+
+/* 頂部標題欄容器 */
+#top-bar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100px; /* 設定固定高度 */
+    background-color: #333; /* 深色背景 */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 添加陰影 */
+    display: flex;
+    align-items: center;
+    padding: 0 20px; /* 左右內距 */
+    box-sizing: border-box;
+    z-index: 5; /* 確保在最上層，高於側邊欄 */
+}
+
+/* 開啟/關閉側邊欄的切換按鈕 */
+#open-nav-btn {
+    font-size: 20px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px; /* 圓角 */
+}
+
+#open-nav-btn:hover {
+    background-color: #3e8e41;
+}
+
+/* 網站主標題樣式 */
+#main-title {
+    position: fixed;
+    left: 50%;
+    top: 0;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: 28px; /* 加大字體 */
+    color: #fff; /* 白色文字 */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* 更換字體 */
+    z-index: 10;
+}
+
+/* 主要內容的包裝容器，使用 Flexbox 進行佈局 */
+#content-wrapper {
+    display: flex;
+    transition: margin-left .5s; /* 配合側邊欄滑動的動畫 */
+    padding-top: 70px; /* 調整內距，避開頂部欄 */
+    height: calc(100vh - 70px);
+    overflow-y: auto;
+    margin-left: 308px; /* 讓右側內容區塊左側與左側欄位對齊 */
+}
+
+/* 中間內容區域 */
+#main-content {
+    flex-grow: 1; /* 佔用剩餘的所有空間 */
+    padding: 20px;
+}
+
+/* 地圖容器的佔位符 */
+#map-container {
+    width: 100%;
+    height: calc(100vh - 70px - 40px); /* 計算高度，減去頂部欄和內距 */
+    background-color: #e0e0e0;
+    border: 1px solid #aaa;
+    box-sizing: border-box;
+}
+
+/* 右側資訊欄 */
+#info-panel {
+    width: 300px;
+    min-width: 300px;
+    max-width: 300px;
+    flex-shrink: 0;
+    background-color: #f1f1f1;
+    padding: 20px;
+    height: calc(100vh - 70px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    transition: none;
+    margin-right: 20px;
+}
+
+#info-panel.open {
+    width: 300px;
+    padding: 20px;
+}
+
+#info-panel * {
+    opacity: 1;
+    transition: none;
+}
+
+#info-panel.open * {
+    opacity: 1;
+}
+
+/* 將 "最近的停車場" 標題置中 */
+#info-panel h3 {
+    margin-top: 0;
+    text-align: center;
+    font-size: 22px;
+    color: #333;
+    font-weight: bold;
+}
+
+/* 停車場列表樣式 */
+#parking-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    margin-bottom: 0;
+}
+
+#parking-list li {
+    background-color: #fff;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+/* 定位權限遮罩層樣式 */
+#location-overlay {
+    display: none; /* 預設隱藏，由 JS 控制顯示 */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8); /* 半透明黑色背景 */
+    z-index: 10; /* 確保在最頂層 */
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+#location-overlay .overlay-content {
+    max-width: 500px;
+    padding: 20px;
+}
+
+#location-overlay button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+/* 隱藏排序按鈕 */
+#sort-btn {
+    display: none;
+}
+
+#parking-info-block {
+    position: static;
+    background: #111;
+    z-index: auto;
+    margin-bottom: 0;
+    padding-bottom: 32px;
+}
+
+/* 新增 .checkbox-row 樣式，讓每行兩個 checkbox 並排且對齊 */
+.checkbox-row {
+    display: flex;
+    justify-content: flex-start;
+    gap: 16px;
+    margin-left: 0;
+    margin-bottom: 4px;
+}
+
+.checkbox-row label {
+    padding: 8px 0 8px 0;
+    font-size: 16px;
+    color: #818181;
+    white-space: nowrap;
+}
+
+/* 搜尋範圍三角形按鈕與展開區塊的樣式 */
+.range-toggle-group {
+    display: flex;
+    align-items: center;
+    margin-left: 32px;
+    margin-bottom: 4px;
+}
+
+.range-toggle-group label {
+    font-size: 18px;
+    color: #818181;
+    margin-right: 8px;
+    padding: 8px 0 8px 0;
+    white-space: nowrap;
+}
+
+.triangle-btn {
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.triangle-btn::after {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 10px solid #818181;
+    transition: transform 0.2s;
+}
+
+.triangle-btn.open::after {
+    transform: rotate(180deg);
+}
+
+#range-select-group {
+    margin-left: 0;
+    margin-bottom: 8px;
+    padding-left: 32px;
+    display: flex;
+    flex-direction: column;
+}
+
+#range-select-group select,
+#range-select-group input[type="text"] {
+    width: calc(100% - 40px);
+    margin-top: 5px;
+    margin-bottom: 0;
+    margin-left: 0;
+}
+
+/* 條件區塊樣式 */
+.condition-toggle-group {
+    display: flex;
+    align-items: center;
+    margin-left: 32px;
+    margin-bottom: 4px;
+}
+
+.condition-toggle-group label {
+    font-size: 18px;
+    color: #818181;
+    margin-right: 8px;
+    padding: 8px 0 8px 0;
+    white-space: nowrap;
+}
+
+#condition-checkbox-group {
+    margin-bottom: 8px;
+    margin-left: 32px;
+    padding-left: 0;
+}
+
+#condition-checkbox-group input[type="text"] {
+    margin-left: 0;
+    width: calc(100% - 40px);
+}
+
+.sort-select-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: calc(100% - 72px); /* 與 input/select 對齊 */
+    margin-left: 32px;
+    margin-bottom: 8px;
+    gap: 2px;
+    padding-left: 0;
+}
+
+.sort-select-group label.sort-label {
+    padding: 0 0 0 0;
+    font-size: 16px;
+    color: #818181;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sort-select-group .sort-label {
+    color: #818181 !important;
+}
+
+.sort-select-group select {
+    width: auto;
+    min-width: 80px;
+    margin: 0 4px;
+    box-sizing: border-box;
+}
+
+.sort-select-group .sort-label:last-child {
+    margin-left: auto;
+    padding-right: 0;
+}
+
+#map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+.mapboxgl-popup-content {
+      background: rgba(40, 40, 40, 0.95);
+      color: #000000;
+      font-size: 14px;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    }
+.marker-user { background: #3498db; }
+.marker-parking { background: #e74c3c; }
+
+/* 定位按鈕樣式 */
+.locate-btn {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #3498db;
+    box-shadow: 0 2px 8px rgba(52,152,219,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: box-shadow 0.2s, background 0.2s;
+    z-index: 10;
+    padding: 0;
+}
+
+.locate-btn:hover {
+    background: #eaf6fb;
+    box-shadow: 0 4px 16px rgba(52,152,219,0.25);
+}
+
+.locate-btn svg {
+    display: block;
+}
+
+/* 排序三行的樣式 */
+.sort-list-group .sort-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.sort-list-group .sort-label {
+    font-size: 16px;
+    color: #818181;
+    white-space: nowrap;
+}
+
+.sort-list-group .sort-arrow {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    vertical-align: middle;
+    transition: background 0.15s;
+    border-radius: 3px;
+}
+
+.sort-list-group .sort-arrow:hover svg path {
+    fill: #3b9ddd;
+}
+
+.sort-list-group .sort-arrow svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.sort-list-group .sort-row > span:last-child {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    width: 56px;
+}
+
+.sort-list-group .sort-row.sort-last > span:last-child {
+    justify-content: flex-start;
+}
+
+.sort-list-group .sort-row.sort-second > span:last-child .sort-up {
+    margin-right: auto;
+}
