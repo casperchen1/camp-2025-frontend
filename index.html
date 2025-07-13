@@ -278,12 +278,21 @@ let rangeValue = null; // 數值 (個數或公尺)
     // Remove all existing markers from the map
     parking_markers.forEach(item => item.marker.remove());
     parking_markers = [];
-    // Remove previous cluster source/layer if exists
-    if (map.getSource('parking-cluster')) {
-      if (map.getLayer('cluster')) map.removeLayer('cluster');
-      if (map.getLayer('cluster-count')) map.removeLayer('cluster-count');
-      map.removeSource('parking-cluster');
+    // Remove previous cluster source/layer if exists (safe checks)
+    function safeRemoveLayer(layerId) {
+      if (map.getLayer(layerId)) {
+        map.removeLayer(layerId);
+      }
     }
+    function safeRemoveSource(sourceId) {
+      if (map.getSource(sourceId)) {
+        map.removeSource(sourceId);
+      }
+    }
+    safeRemoveLayer('cluster');
+    safeRemoveLayer('cluster-count');
+    safeRemoveLayer('unclustered-point');
+    safeRemoveSource('parking-cluster');
     fetch('data/TCMSV_alldesc.json')
       .then(response => response.json())
       .then(json => {
@@ -356,68 +365,149 @@ let rangeValue = null; // 數值 (個數或公尺)
             }
           }))
         };
-        map.addSource('parking-cluster', {
-          type: 'geojson',
-          data: geojson,
-          cluster: true,
-          clusterMaxZoom: 14,
-          clusterRadius: 50
-        });
-        map.addLayer({
-          id: 'cluster',
-          type: 'circle',
-          source: 'parking-cluster',
-          filter: ['has', 'point_count'],
-          paint: {
-            // Color ramp: green (small) → yellow → orange → red (large)
-            'circle-color': [
-              'step',
-              ['get', 'point_count'],
-              '#4ade80', // green for 0-9
-              10, '#facc15', // yellow for 10-29
-              30, '#fb923c', // orange for 30-49
-              50, '#ef4444' // red for 50+
-            ],
-            'circle-radius': [
-              'step',
-              ['get', 'point_count'],
-              22, 10, 28, 30, 36, 50, 44
-            ],
-            'circle-stroke-width': 4,
-            'circle-stroke-color': '#fff',
-            'circle-blur': 0.15
+        // Wait for map to be ready before adding source/layers
+        function addClusterLayers() {
+          if (!map.isStyleLoaded()) {
+            map.once('idle', addClusterLayers);
+            return;
           }
-        });
-        map.addLayer({
-          id: 'cluster-count',
-          type: 'symbol',
-          source: 'parking-cluster',
-          filter: ['has', 'point_count'],
-          layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-            'text-size': 18
-          },
-          paint: {
-            'text-color': '#fff',
-            'text-halo-color': '#222',
-            'text-halo-width': 2,
-            'text-halo-blur': 0.5
-          }
-        });
-        // Restore unclustered-point layer for unclustered points
-        map.addLayer({
-          id: 'unclustered-point',
-          type: 'circle',
-          source: 'parking-cluster',
-          filter: ['!', ['has', 'point_count']],
-          paint: {
-            'circle-color': '#e74c3c',
-            'circle-radius': 10,
-            'circle-stroke-width': 1,
-            'circle-stroke-color': '#fff'
-          }
-        });
+          // Remove if already exists (safety)
+          safeRemoveLayer('cluster');
+          safeRemoveLayer('cluster-count');
+          safeRemoveLayer('unclustered-point');
+          safeRemoveSource('parking-cluster');
+          map.addSource('parking-cluster', {
+            type: 'geojson',
+            data: geojson,
+            cluster: true,
+            clusterMaxZoom: 14,
+            clusterRadius: 50
+          });
+          map.addLayer({
+            id: 'cluster',
+            type: 'circle',
+            source: 'parking-cluster',
+            filter: ['has', 'point_count'],
+            paint: {
+              // Color ramp: green (small) → yellow → orange → red (large)
+              'circle-color': [
+                'step',
+                ['get', 'point_count'],
+                '#4ade80', // green for 0-9
+                10, '#facc15', // yellow for 10-29
+                30, '#fb923c', // orange for 30-49
+                50, '#ef4444' // red for 50+
+              ],
+              'circle-radius': [
+                'step',
+                ['get', 'point_count'],
+                22, 10, 28, 30, 36, 50, 44
+              ],
+              'circle-stroke-width': 4,
+              'circle-stroke-color': '#fff',
+              'circle-blur': 0.15
+            }
+          });
+          map.addLayer({
+            id: 'cluster-count',
+            type: 'symbol',
+            source: 'parking-cluster',
+            filter: ['has', 'point_count'],
+            layout: {
+              'text-field': '{point_count_abbreviated}',
+              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+              'text-size': 18
+            },
+            paint: {
+              'text-color': '#fff',
+              'text-halo-color': '#222',
+              'text-halo-width': 2,
+              'text-halo-blur': 0.5
+            }
+          });
+          // Restore unclustered-point layer for unclustered points
+          map.addLayer({
+            id: 'unclustered-point',
+            type: 'circle',
+            source: 'parking-cluster',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+              'circle-color': '#e74c3c',
+              'circle-radius': 10,
+              'circle-stroke-width': 1,
+              'circle-stroke-color': '#fff'
+            }
+          });
+
+          // Remove previous event listeners to avoid duplicates
+          map.off('mouseenter', 'unclustered-point', map._unclusterMouseEnterHandler);
+          map.off('mouseleave', 'unclustered-point', map._unclusterMouseLeaveHandler);
+
+          // Define and store the handlers on the map object for later removal
+          map._unclusterMouseEnterHandler = function(e) {
+            map.getCanvas().style.cursor = 'pointer';
+            if (!userLocation) return;
+            // Remove previous route and popup
+            if (currentRouteId) {
+              if (map.getSource(currentRouteId)) {
+                map.removeLayer(currentRouteId);
+                map.removeSource(currentRouteId);
+              }
+              currentRouteId = null;
+            }
+            if (activePopup) {
+              activePopup.remove();
+              activePopup = null;
+            }
+            const props = e.features[0].properties;
+            const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLocation[0]},${userLocation[1]};${props.lng},${props.lat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+            fetch(url)
+              .then(res => res.json())
+              .then(result => {
+                if (result.routes && result.routes[0]) {
+                  const distanceKm = (result.routes[0].distance / 1000).toFixed(2);
+                  const durationMin = Math.round(result.routes[0].duration / 60);
+                  const route = result.routes[0].geometry;
+                  currentRouteId = 'route-' + Date.now();
+                  map.addSource(currentRouteId, {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: route }
+                  });
+                  map.addLayer({
+                    id: currentRouteId,
+                    type: 'line',
+                    source: currentRouteId,
+                    layout: { 'line-cap': 'round', 'line-join': 'round' },
+                    paint: { 'line-color': '#3b9ddd', 'line-width': 4 }
+                  });
+                  // Show popup at destination point (last coordinate)
+                  const coords = route.coordinates;
+                  const destPoint = coords[coords.length - 1];
+                  activePopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
+                    .setLngLat(destPoint)
+                    .setHTML(`<strong>距離:</strong> ${distanceKm} km<br><strong>預估:</strong> ${durationMin} 分`)
+                    .addTo(map);
+                }
+              });
+          };
+          map._unclusterMouseLeaveHandler = function() {
+            map.getCanvas().style.cursor = '';
+            if (currentRouteId) {
+              if (map.getSource(currentRouteId)) {
+                map.removeLayer(currentRouteId);
+                map.removeSource(currentRouteId);
+              }
+              currentRouteId = null;
+            }
+            if (activePopup) {
+              activePopup.remove();
+              activePopup = null;
+            }
+          };
+          map.on('mouseenter', 'unclustered-point', map._unclusterMouseEnterHandler);
+          map.on('mouseleave', 'unclustered-point', map._unclusterMouseLeaveHandler);
+        }
+        addClusterLayers();
         // (No unclustered-point layer, since Markers are used for unclustered points)
         // Add popup for unclustered points (click)
         map.on('click', 'unclustered-point', function(e) {
@@ -427,67 +517,6 @@ let rangeValue = null; // 數值 (個數或公尺)
             .setLngLat(coordinates)
             .setHTML(`<strong>${props.name}</strong><br>價格：${props.price}<br>剩餘空位：${props.totalcar}`)
             .addTo(map);
-        });
-        // Add route rendering on hover for unclustered points
-        map.on('mouseenter', 'unclustered-point', function(e) {
-          map.getCanvas().style.cursor = 'pointer';
-          if (!userLocation) return;
-          // Remove previous route and popup
-          if (currentRouteId) {
-            if (map.getSource(currentRouteId)) {
-              map.removeLayer(currentRouteId);
-              map.removeSource(currentRouteId);
-            }
-            currentRouteId = null;
-          }
-          if (activePopup) {
-            activePopup.remove();
-            activePopup = null;
-          }
-          const props = e.features[0].properties;
-          const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLocation[0]},${userLocation[1]};${props.lng},${props.lat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
-          fetch(url)
-            .then(res => res.json())
-            .then(result => {
-              if (result.routes && result.routes[0]) {
-                const distanceKm = (result.routes[0].distance / 1000).toFixed(2);
-                const durationMin = Math.round(result.routes[0].duration / 60);
-                const route = result.routes[0].geometry;
-                currentRouteId = 'route-' + Date.now();
-                map.addSource(currentRouteId, {
-                  type: 'geojson',
-                  data: { type: 'Feature', geometry: route }
-                });
-                map.addLayer({
-                  id: currentRouteId,
-                  type: 'line',
-                  source: currentRouteId,
-                  layout: { 'line-cap': 'round', 'line-join': 'round' },
-                  paint: { 'line-color': '#3b9ddd', 'line-width': 4 }
-                });
-                // Show popup at destination point (last coordinate)
-                const coords = route.coordinates;
-                const destPoint = coords[coords.length - 1];
-                activePopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
-                  .setLngLat(destPoint)
-                  .setHTML(`<strong>距離:</strong> ${distanceKm} km<br><strong>預估:</strong> ${durationMin} 分`)
-                  .addTo(map);
-              }
-            });
-        });
-        map.on('mouseleave', 'unclustered-point', function() {
-          map.getCanvas().style.cursor = '';
-          if (currentRouteId) {
-            if (map.getSource(currentRouteId)) {
-              map.removeLayer(currentRouteId);
-              map.removeSource(currentRouteId);
-            }
-            currentRouteId = null;
-          }
-          if (activePopup) {
-            activePopup.remove();
-            activePopup = null;
-          }
         });
         // --- END CLUSTERING ---
         // Add this function to update the parking list
