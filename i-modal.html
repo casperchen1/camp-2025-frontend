@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>停車場比價網 - 說明視窗</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #000;
+      color: #f0f0f0;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 40px 20px 10px;
+      font-size: 32px;
+    }
+
+    #open-modal {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #00ccff;
+      color: #000;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      z-index: 10;
+    }
+
+    /* Modal Style */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.8);
+    }
+
+    .modal-content {
+      background-color: #1c1c1e;
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 800px;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .highlight {
+      color: #00ccff;
+      font-weight: bold;
+    }
+
+    a {
+      color: #00ccff;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<h1>停車場比價網</h1>
+
+<button id="open-modal">顯示說明</button>
+
+<div id="info-modal" class="modal">
+  <div class="modal-content">
+    <span class="close" id="close-modal">&times;</span>
+    <p>在台灣，<span class="highlight">尋找停車位</span>經常是一件既耗時又令人困擾的事情。為了解決這個問題，我們提出了「停車場比價網」的概念，打造出一個能夠即時查詢並比較各停車場資訊的網站。</p>
+
+    <p>本網站的核心功能之一是透過地圖介面（採用 <a href="https://www.mapbox.com/" target="_blank">Mapbox</a>）清楚呈現每個停車場的位置。使用者可以查詢目前位置到各停車場的距離（透過外部 API 計算），並根據 <span class="highlight">停車費用、距離、剩餘空位</span>等條件進行排序，快速找到最合適的停車場。</p>
+
+    <p>網站也提供即時線上瀏覽量顯示，以分析使用者使用趨勢，並利用模擬資料來呈現停車場詳細資訊。</p>
+
+    <p>進一步功能包括顯示各停車場支援的<span class="highlight">付款方式</span>（如行動支付、信用卡等）以及是否具備<span class="highlight">電動車充電設備</span>，大幅提升實用性與完整性。</p>
+
+    <p>透過這樣的設計，我們希望為台灣的駕駛人打造一個<span class="highlight">快速、方便、資訊透明</span>的停車場查詢與比價平台。</p>
+  </div>
+</div>
+
+<script>
+  const modal = document.getElementById("info-modal");
+  const btn = document.getElementById("open-modal");
+  const span = document.getElementById("close-modal");
+
+  btn.onclick = function() {
+    modal.style.display = "block";
+  }
+
+  span.onclick = function() {
+    modal.style.display = "none";
+  }
+
+  window.onclick = function(event) {
+    if (event.target == modal) {
+      modal.style.display = "none";
+    }
+  }
+</script>
+
+</body>
+</html>
