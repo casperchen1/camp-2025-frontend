@@ -163,6 +163,10 @@
               <circle cx="12" cy="12" r="3" fill="#3498db"/>
             </svg>
         </button>
+        <!-- 新增：地圖縮放顯示 -->
+        <div id="zoom-level-display" style="position: absolute; right: 24px; bottom: 80px; z-index: 301; background: rgba(0,0,0,0.7); color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 15px;">
+      Zoom: 13.00
+    </div>
     </div>
 
     <!-- 引入 JavaScript 檔案 -->
@@ -576,6 +580,225 @@ let rangeValue = null; // 數值 (個數或公尺)
       if (e.key === 'Enter') updateRangeAndRender();
     });
   });
+
+  // 顯示聚類圓圈圈與覆蓋處標記總數（地圖縮放大小改變時）
+function showClusterCountCircle() {
+  // 取得所有聚類點 (clusters)
+  const clusters = map.queryRenderedFeatures({ layers: ['clusters'] });
+  let clusterBadge = document.getElementById('cluster-count-badge');
+  if (clusters.length > 0) {
+    // 只顯示最大一個聚類（或全部聚類都顯示）
+    if (!clusterBadge) {
+      clusterBadge = document.createElement('div');
+      clusterBadge.id = 'cluster-count-badge';
+      clusterBadge.style.position = 'fixed';
+      clusterBadge.style.right = '32px';
+      clusterBadge.style.bottom = '100px';
+      clusterBadge.style.zIndex = '999';
+      document.body.appendChild(clusterBadge);
+    }
+    // 只顯示最大聚類的數量
+    const maxCluster = clusters.reduce((a, b) => (a.properties.point_count > b.properties.point_count ? a : b));
+    const count = maxCluster.properties.point_count;
+    clusterBadge.innerHTML = `
+      <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="24" fill="#e74c3c" stroke="#fff" stroke-width="4"/>
+        </svg>
+        <span style="position:absolute;left:0;top:0;width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:bold;color:#fff;">${count}</span>
+      </div>
+    `;
+    clusterBadge.style.display = 'block';
+  } else {
+    if (clusterBadge) clusterBadge.style.display = 'none';
+  }
+}
+
+map.on('zoomend', showClusterCountCircle);
+map.on('moveend', showClusterCountCircle);
+map.on('load', showClusterCountCircle);
+
+// 在地圖加載完成後，加入 symbol/circle layer 顯示剩餘空位（totalcar）在節點正中央
+map.on('load', function() {
+  // 加入 symbol layer 顯示剩餘空位
+  if (map.getSource('parkings')) {
+    // 已有 source 不需重複加
+    return;
+  }
+  // 取得所有停車場資料
+  fetch('data/TCMSV_alldesc.json')
+    .then(response => response.json())
+    .then(json => {
+      const features = json.data.park.map(point => ({
+        type: 'Feature',
+        properties: point,
+        geometry: {
+          type: 'Point',
+          coordinates: [point.lng, point.lat]
+        }
+      }));
+map.addSource('parkings', {
+  type: 'geojson',
+  data: {
+    type: 'FeatureCollection',
+    features: features
+  },
+  cluster: true,
+  clusterRadius: 30,
+  clusterMaxZoom: 18,
+  clusterProperties: {
+    cluster_totalcar: ['+', ['get', 'totalcar']]
+  }
+});
+      // 圓形節點（紅色，僅顯示未聚類點）
+      map.addLayer({
+        id: 'parking-circle',
+        type: 'circle',
+        source: 'parkings',
+        filter: ['!', ['has', 'point_count']], // 只顯示未聚類點
+        paint: {
+          'circle-color': '#e74c3c',
+          'circle-radius': 18,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#fff'
+        }
+      });
+      // 數字在紅色圓形正中央（僅顯示未聚類點）
+      map.addLayer({
+        id: 'parking-count',
+        type: 'symbol',
+        source: 'parkings',
+        filter: ['!', ['has', 'point_count']], // 只顯示未聚類點
+        layout: {
+          'text-field': ['to-string', ['get', 'totalcar']],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 16,
+          'text-anchor': 'center',
+          'text-allow-overlap': true,
+          'icon-allow-overlap': true
+        },
+        paint: {
+          'text-color': '#fff',
+          'text-halo-color': '#e74c3c',
+          'text-halo-width': 2
+        }
+      });
+
+      // 新增：聚類圈圈（藍色）顯示重疊加總
+      map.addSource('parking-clusters', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: features
+        },
+        cluster: true,
+        clusterRadius: 30,
+        clusterMaxZoom: 18,
+        clusterProperties: {
+          cluster_totalcar: ['+', ['get', 'totalcar']]
+        }
+      });
+      // 藍色聚類圈圈
+      map.addLayer({
+        id: 'parking-cluster-circle',
+        type: 'circle',
+        source: 'parking-clusters',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': '#3498db',
+          'circle-radius': 22,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#fff'
+        }
+      });
+      // 聚類加總數字（totalcar加總）
+      map.addLayer({
+        id: 'parking-cluster-count',
+        type: 'symbol',
+        source: 'parking-clusters',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': [
+            'to-string',
+            ['get', 'cluster_totalcar']
+          ],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 17,
+          'text-anchor': 'center',
+          'text-allow-overlap': true
+        },
+        paint: {
+          'text-color': '#fff',
+          'text-halo-color': '#3498db',
+          'text-halo-width': 2
+        }
+      });
+
+      // 計算每個聚類的 totalcar 加總（Mapbox 沒有原生支援，需自訂 clusterProperties）
+      // 需在 addSource 時加上 clusterProperties
+      // 重新建立 source，加入 clusterProperties
+      map.removeSource('parking-clusters');
+      map.addSource('parking-clusters', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: features
+        },
+        cluster: true,
+        clusterRadius: 30,
+        clusterMaxZoom: 18,
+        clusterProperties: {
+          cluster_totalcar: ['+', ['get', 'totalcar']]
+        }
+      });
+
+      // 重新加藍色圈圈和數字層（順序不能變）
+      map.addLayer({
+        id: 'parking-cluster-circle',
+        type: 'circle',
+        source: 'parking-clusters',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': '#3498db',
+          'circle-radius': 22,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#fff'
+        }
+      });
+      map.addLayer({
+        id: 'parking-cluster-count',
+        type: 'symbol',
+        source: 'parking-clusters',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': [
+            'to-string',
+            ['get', 'cluster_totalcar']
+          ],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 17,
+          'text-anchor': 'center',
+          'text-allow-overlap': true
+        },
+        paint: {
+          'text-color': '#fff',
+          'text-halo-color': '#3498db',
+          'text-halo-width': 2
+        }
+      });
+    });
+});
+
+// 地圖右下角顯示 zoom 大小
+document.addEventListener('DOMContentLoaded', function() {
+  const zoomDisplay = document.getElementById('zoom-level-display');
+  function updateZoomDisplay() {
+    zoomDisplay.textContent = `Zoom: ${map.getZoom().toFixed(2)}`;
+  }
+  map.on('zoom', updateZoomDisplay);
+  map.on('load', updateZoomDisplay);
+  updateZoomDisplay();
+});
         </script>
 </body>
 </html>
