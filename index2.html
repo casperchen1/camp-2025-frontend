@@ -163,10 +163,6 @@
               <circle cx="12" cy="12" r="3" fill="#3498db"/>
             </svg>
         </button>
-        <!-- 新增：地圖縮放顯示 -->
-        <div id="zoom-level-display" style="position: absolute; right: 24px; bottom: 80px; z-index: 301; background: rgba(0,0,0,0.7); color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 15px;">
-      Zoom: 13.00
-    </div>
     </div>
 
     <!-- 引入 JavaScript 檔案 -->
@@ -280,8 +276,9 @@ let rangeValue = null; // 數值 (個數或公尺)
     parking_markers = [];
     // Remove previous cluster source/layer if exists
     if (map.getSource('parking-cluster')) {
-      if (map.getLayer('cluster')) map.removeLayer('cluster');
-      if (map.getLayer('cluster-count')) map.removeLayer('cluster-count');
+      map.removeLayer('cluster');
+      map.removeLayer('cluster-count');
+      map.removeLayer('unclustered-point');
       map.removeSource('parking-cluster');
     }
     fetch('data/TCMSV_alldesc.json')
@@ -369,23 +366,12 @@ let rangeValue = null; // 數值 (個數或公尺)
           source: 'parking-cluster',
           filter: ['has', 'point_count'],
           paint: {
-            // Color ramp: green (small) → yellow → orange → red (large)
-            'circle-color': [
-              'step',
-              ['get', 'point_count'],
-              '#4ade80', // green for 0-9
-              10, '#facc15', // yellow for 10-29
-              30, '#fb923c', // orange for 30-49
-              50, '#ef4444' // red for 50+
-            ],
+            'circle-color': '#f28cb1',
             'circle-radius': [
               'step',
               ['get', 'point_count'],
-              22, 10, 28, 30, 36, 50, 44
-            ],
-            'circle-stroke-width': 4,
-            'circle-stroke-color': '#fff',
-            'circle-blur': 0.15
+              20, 10, 30, 30, 40
+            ]
           }
         });
         map.addLayer({
@@ -395,17 +381,10 @@ let rangeValue = null; // 數值 (個數或公尺)
           filter: ['has', 'point_count'],
           layout: {
             'text-field': '{point_count_abbreviated}',
-            'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-            'text-size': 18
-          },
-          paint: {
-            'text-color': '#fff',
-            'text-halo-color': '#222',
-            'text-halo-width': 2,
-            'text-halo-blur': 0.5
+            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+            'text-size': 14
           }
         });
-        // Restore unclustered-point layer for unclustered points
         map.addLayer({
           id: 'unclustered-point',
           type: 'circle',
@@ -418,8 +397,7 @@ let rangeValue = null; // 數值 (個數或公尺)
             'circle-stroke-color': '#fff'
           }
         });
-        // (No unclustered-point layer, since Markers are used for unclustered points)
-        // Add popup for unclustered points (click)
+        // Add popup for unclustered points
         map.on('click', 'unclustered-point', function(e) {
           const coordinates = e.features[0].geometry.coordinates.slice();
           const props = e.features[0].properties;
@@ -427,67 +405,6 @@ let rangeValue = null; // 數值 (個數或公尺)
             .setLngLat(coordinates)
             .setHTML(`<strong>${props.name}</strong><br>價格：${props.price}<br>剩餘空位：${props.totalcar}`)
             .addTo(map);
-        });
-        // Add route rendering on hover for unclustered points
-        map.on('mouseenter', 'unclustered-point', function(e) {
-          map.getCanvas().style.cursor = 'pointer';
-          if (!userLocation) return;
-          // Remove previous route and popup
-          if (currentRouteId) {
-            if (map.getSource(currentRouteId)) {
-              map.removeLayer(currentRouteId);
-              map.removeSource(currentRouteId);
-            }
-            currentRouteId = null;
-          }
-          if (activePopup) {
-            activePopup.remove();
-            activePopup = null;
-          }
-          const props = e.features[0].properties;
-          const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLocation[0]},${userLocation[1]};${props.lng},${props.lat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
-          fetch(url)
-            .then(res => res.json())
-            .then(result => {
-              if (result.routes && result.routes[0]) {
-                const distanceKm = (result.routes[0].distance / 1000).toFixed(2);
-                const durationMin = Math.round(result.routes[0].duration / 60);
-                const route = result.routes[0].geometry;
-                currentRouteId = 'route-' + Date.now();
-                map.addSource(currentRouteId, {
-                  type: 'geojson',
-                  data: { type: 'Feature', geometry: route }
-                });
-                map.addLayer({
-                  id: currentRouteId,
-                  type: 'line',
-                  source: currentRouteId,
-                  layout: { 'line-cap': 'round', 'line-join': 'round' },
-                  paint: { 'line-color': '#3b9ddd', 'line-width': 4 }
-                });
-                // Show popup at destination point (last coordinate)
-                const coords = route.coordinates;
-                const destPoint = coords[coords.length - 1];
-                activePopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
-                  .setLngLat(destPoint)
-                  .setHTML(`<strong>距離:</strong> ${distanceKm} km<br><strong>預估:</strong> ${durationMin} 分`)
-                  .addTo(map);
-              }
-            });
-        });
-        map.on('mouseleave', 'unclustered-point', function() {
-          map.getCanvas().style.cursor = '';
-          if (currentRouteId) {
-            if (map.getSource(currentRouteId)) {
-              map.removeLayer(currentRouteId);
-              map.removeSource(currentRouteId);
-            }
-            currentRouteId = null;
-          }
-          if (activePopup) {
-            activePopup.remove();
-            activePopup = null;
-          }
         });
         // --- END CLUSTERING ---
         // Add this function to update the parking list
@@ -670,54 +587,6 @@ let rangeValue = null; // 數值 (個數或公尺)
       if (e.key === 'Enter') updateRangeAndRender();
     });
   });
-
-  // 顯示聚類圓圈圈與覆蓋處標記總數（地圖縮放大小改變時）
-function showClusterCountCircle() {
-  // 取得所有聚類點 (clusters)
-  const clusters = map.queryRenderedFeatures({ layers: ['clusters'] });
-  let clusterBadge = document.getElementById('cluster-count-badge');
-  if (clusters.length > 0) {
-    // 只顯示最大一個聚類（或全部聚類都顯示）
-    if (!clusterBadge) {
-      clusterBadge = document.createElement('div');
-      clusterBadge.id = 'cluster-count-badge';
-      clusterBadge.style.position = 'fixed';
-      clusterBadge.style.right = '32px';
-      clusterBadge.style.bottom = '100px';
-      clusterBadge.style.zIndex = '999';
-      document.body.appendChild(clusterBadge);
-    }
-    // 只顯示最大聚類的數量
-    const maxCluster = clusters.reduce((a, b) => (a.properties.point_count > b.properties.point_count ? a : b));
-    const count = maxCluster.properties.point_count;
-    clusterBadge.innerHTML = `
-      <div style="position:relative;display:flex;align-items:center;justify-content:center;">
-        <svg width="56" height="56" viewBox="0 0 56 56">
-          <circle cx="28" cy="28" r="24" fill="#e74c3c" stroke="#fff" stroke-width="4"/>
-        </svg>
-        <span style="position:absolute;left:0;top:0;width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:bold;color:#fff;">${count}</span>
-      </div>
-    `;
-    clusterBadge.style.display = 'block';
-  } else {
-    if (clusterBadge) clusterBadge.style.display = 'none';
-  }
-}
-
-map.on('zoomend', showClusterCountCircle);
-map.on('moveend', showClusterCountCircle);
-map.on('load', showClusterCountCircle);
-
-// 地圖右下角顯示 zoom 大小
-document.addEventListener('DOMContentLoaded', function() {
-  const zoomDisplay = document.getElementById('zoom-level-display');
-  function updateZoomDisplay() {
-    zoomDisplay.textContent = `Zoom: ${map.getZoom().toFixed(2)}`;
-  }
-  map.on('zoom', updateZoomDisplay);
-  map.on('load', updateZoomDisplay);
-  updateZoomDisplay();
-});
         </script>
 </body>
 </html>
