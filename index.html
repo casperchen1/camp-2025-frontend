@@ -684,6 +684,42 @@ map.addSource('parkings', {
         }
       });
 
+      // 新增：zoom > 15 顯示價格在圈圈附近
+      map.addLayer({
+        id: 'parking-price',
+        type: 'symbol',
+        source: 'parkings',
+        filter: [
+          'all',
+          ['!', ['has', 'point_count']],
+          ['>', ['zoom'], 15]
+        ],
+        layout: {
+          'text-field': [
+            'concat',
+            '$',
+            [
+              'to-string',
+              [
+                'coalesce',
+                ['get', 'price'],
+                ''
+              ]
+            ]
+          ],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 15,
+          'text-anchor': 'top',
+          'text-offset': [0, 2.2],
+          'text-allow-overlap': true
+        },
+        paint: {
+          'text-color': '#ffd700',
+          'text-halo-color': '#222',
+          'text-halo-width': 2
+        }
+      });
+
       // 新增：聚類圈圈（藍色）顯示重疊加總
       map.addSource('parking-clusters', {
         type: 'geojson',
