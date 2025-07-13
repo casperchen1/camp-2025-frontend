@@ -179,12 +179,13 @@
     locateUser();
   });
 
-  let userLocation = null;
-  let currentRouteId = null;
-  let activePopup = null;
-  let parking_list = [];  // 儲存距離資料
-  let parking_markers = [];  // 儲存 marker 和停車場資料對應
-  let filterIndoor = false; // Variable to store whether '室內停車場' is selected
+let userLocation = null;
+let userLocationMarker = null; // Store the current user location marker
+let currentRouteId = null;
+let activePopup = null;
+let parking_list = [];  // 儲存距離資料
+let parking_markers = [];  // 儲存 marker 和停車場資料對應
+let filterIndoor = false; // Variable to store whether '室內停車場' is selected
 let filterEV = false; // Variable to store whether '電動車充電' is selected
 let MAX_PARKING_RENDER = 10; // Default value, now let
 let priceUpperLimit = null; // 價格上限
@@ -566,7 +567,12 @@ let rangeValue = null; // 數值 (個數或公尺)
   function locateUser() {
     navigator.geolocation.getCurrentPosition(position => {
       userLocation = [position.coords.longitude, position.coords.latitude];
-      new mapboxgl.Marker({ color: '#3498db' })
+      // Remove previous user location marker if exists
+      if (userLocationMarker) {
+        userLocationMarker.remove();
+        userLocationMarker = null;
+      }
+      userLocationMarker = new mapboxgl.Marker({ color: '#3498db' })
         .setLngLat(userLocation)
         .setPopup(new mapboxgl.Popup().setText("你的位置"))
         .addTo(map);
